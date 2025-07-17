@@ -1,0 +1,725 @@
+Buscador 
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Localización de Productos</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            padding: 40px;
+        }
+        
+        .upload-section {
+            background: #f8f9fa;
+            border: 3px dashed #dee2e6;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-section:hover {
+            border-color: #3498db;
+            background: #e3f2fd;
+            transform: translateY(-2px);
+        }
+        
+        .upload-section.dragover {
+            border-color: #2ecc71;
+            background: #e8f5e8;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .upload-btn {
+            background: linear-gradient(135deg, #3498db, #2ecc71);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+        
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+        }
+        
+        .search-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+        
+        .search-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+            min-width: 300px;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+        
+        .search-btn {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            font-size: 1.1em;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+        
+        .search-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(231, 76, 60, 0.3);
+        }
+        
+        .clear-btn {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            font-size: 1.1em;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+        
+        .clear-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(149, 165, 166, 0.3);
+        }
+        
+        .results-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+        
+        .product-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 5px solid #3498db;
+            transition: all 0.3s ease;
+        }
+        
+        .product-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .product-title {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .product-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .info-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #e1e8ed;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        
+        .info-value {
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+        
+        .location-highlight {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-top: 20px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        
+        .no-results {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 1.2em;
+            padding: 40px;
+        }
+        
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .success {
+            background: #2ecc71;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        
+        .icon {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+        
+        @media (max-width: 768px) {
+            .search-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-input {
+                min-width: auto;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏪 Sistema de Localización de Productos</h1>
+            <p>Encuentra rápidamente la ubicación de tus productos en el almacén</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="upload-section" id="uploadSection">
+                <h2>📁 Cargar Archivo Excel</h2>
+                <p>Selecciona o arrastra tu archivo Excel con los datos del inventario</p>
+                <br>
+                <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" />
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    Seleccionar Archivo
+                </button>
+                <div id="fileName" style="margin-top: 10px; font-weight: bold; color: #3498db;"></div>
+                <div class="stats" id="fileStats" style="display: none;">
+                    <div class="stat-item">
+                        <div class="stat-number" id="totalProducts">0</div>
+                        <div class="stat-label">Productos Total</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="totalColumns">0</div>
+                        <div class="stat-label">Columnas</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="totalRows">0</div>
+                        <div class="stat-label">Filas</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="search-section" id="searchSection">
+                <h2>🎯 Búsqueda Exacta de Productos</h2>
+                <div class="search-group">
+                    <input type="text" 
+                           id="searchInput" 
+                           class="search-input" 
+                           placeholder="Código exacto: 103, ABC123, o nombre completo..." 
+                           onkeypress="handleKeyPress(event)">
+                    <button class="search-btn" onclick="searchProduct()">
+                        🎯 Buscar Exacto
+                    </button>
+                    <button class="clear-btn" onclick="clearSearch()">
+                        🗑️ Limpiar
+                    </button>
+                </div>
+                <div id="searchSuggestions" style="margin-top: 10px; font-size: 0.9em; color: #7f8c8d;"></div>
+            </div>
+            
+            <div class="results-section" id="resultsSection">
+                <h2>📦 Resultados de Búsqueda</h2>
+                <div id="results"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let excelData = [];
+        let headers = [];
+        
+        // Configurar drag and drop
+        const uploadSection = document.getElementById('uploadSection');
+        const fileInput = document.getElementById('fileInput');
+        
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+        
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+        
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        function handleFile(file) {
+            const fileName = document.getElementById('fileName');
+            fileName.textContent = `Archivo seleccionado: ${file.name}`;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    
+                    // Convertir a JSON
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    if (jsonData.length > 0) {
+                        headers = jsonData[0];
+                        excelData = jsonData.slice(1);
+                        
+                        // Mostrar estadísticas
+                        updateStats();
+                        
+                        // Mostrar sección de búsqueda
+                        document.getElementById('searchSection').style.display = 'block';
+                        
+                        showMessage('✅ Archivo cargado exitosamente. ¡Listo para buscar!', 'success');
+                        
+                        // Mostrar sugerencias de búsqueda
+                        updateSearchSuggestions();
+                    } else {
+                        showMessage('❌ El archivo está vacío o no tiene el formato correcto.', 'error');
+                    }
+                } catch (error) {
+                    showMessage('❌ Error al leer el archivo: ' + error.message, 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+        
+        function updateStats() {
+            const stats = document.getElementById('fileStats');
+            document.getElementById('totalProducts').textContent = excelData.length;
+            document.getElementById('totalColumns').textContent = headers.length;
+            document.getElementById('totalRows').textContent = excelData.length + 1; // +1 para headers
+            stats.style.display = 'flex';
+        }
+        
+        function updateSearchSuggestions() {
+            const suggestions = document.getElementById('searchSuggestions');
+            const searchColumns = identifySearchColumns();
+            
+            if (searchColumns.length > 0) {
+                const columnInfo = searchColumns.map(col => {
+                    const typeNames = {
+                        'internal_code': '🔢 Código Interno',
+                        'name': '📝 Nombre/Descripción',
+                        'barcode_main': '🏷️ Código de Barras Principal',
+                        'barcode_secondary': '🏷️ Códigos de Barras Secundarios'
+                    };
+                    return `${typeNames[col.type]}: "${col.header}"`;
+                }).join('<br>');
+                
+                suggestions.innerHTML = `
+                    <strong>🔍 Búsqueda exacta disponible en:</strong><br>
+                    ${columnInfo}
+                    <br><br>
+                    <strong>💡 Consejos:</strong><br>
+                    • La búsqueda es exacta, escribe el código completo<br>
+                    • Para códigos de barras secundarios, puedes buscar cualquiera de los códigos separados por comas<br>
+                    • Ejemplo: Si buscas "103", solo mostrará el producto con código exacto "103"
+                `;
+            } else {
+                suggestions.innerHTML = `
+                    <strong>⚠️ Columnas detectadas:</strong> ${headers.join(', ')}<br>
+                    <strong>💡 Sugerencia:</strong> Asegúrate de que tu Excel tenga columnas como:
+                    "Código Interno", "Nombre", "Código de Barras Principal", "Código de Barras Secundarios"
+                `;
+            }
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                searchProduct();
+            }
+        }
+        
+        function searchProduct() {
+            const searchTerm = document.getElementById('searchInput').value.trim();
+            if (!searchTerm) {
+                showMessage('⚠️ Por favor ingresa un término de búsqueda.', 'error');
+                return;
+            }
+            
+            if (excelData.length === 0) {
+                showMessage('⚠️ Primero debes cargar un archivo Excel.', 'error');
+                return;
+            }
+            
+            console.log('Iniciando búsqueda para:', searchTerm);
+            console.log('Datos disponibles:', excelData.length, 'filas');
+            
+            const results = findProducts(searchTerm);
+            displayResults(results, searchTerm);
+        }
+        
+        function findProducts(searchTerm) {
+            const results = [];
+            const searchExact = searchTerm.trim();
+            
+            console.log('Buscando término:', searchExact);
+            console.log('Headers disponibles:', headers);
+            
+            // Si no hay columnas específicas identificadas, buscar en todas las columnas
+            const searchColumns = identifySearchColumns();
+            console.log('Columnas de búsqueda identificadas:', searchColumns);
+            
+            // Si no se identificaron columnas específicas, buscar en todas
+            if (searchColumns.length === 0) {
+                headers.forEach((header, index) => {
+                    searchColumns.push({ index, header, type: 'general' });
+                });
+            }
+            
+            excelData.forEach((row, index) => {
+                let matchFound = false;
+                let matchedColumn = '';
+                let matchedValue = '';
+                
+                // Buscar en columnas específicas de manera exacta
+                searchColumns.forEach(colInfo => {
+                    const cellValue = row[colInfo.index];
+                    if (cellValue && !matchFound) {
+                        const cellStr = cellValue.toString().trim();
+                        console.log(`Comparando "${cellStr}" con "${searchExact}" en columna ${colInfo.header}`);
+                        
+                        // Para códigos de barras secundarios, buscar en la cadena separada por comas, punto y coma o espacios
+                        if (colInfo.type === 'barcode_secondary') {
+                            const barcodes = cellStr.split(/[,;|\s]+/).map(bc => bc.trim()).filter(bc => bc.length > 0);
+                            console.log('Códigos de barras secundarios encontrados:', barcodes);
+                            if (barcodes.includes(searchExact)) {
+                                matchFound = true;
+                                matchedColumn = colInfo.header;
+                                matchedValue = cellValue;
+                                console.log('¡Coincidencia encontrada en códigos secundarios!');
+                            }
+                        } else {
+                            // Búsqueda exacta para código interno, nombre y código de barras principal
+                            if (cellStr === searchExact) {
+                                matchFound = true;
+                                matchedColumn = colInfo.header;
+                                matchedValue = cellValue;
+                                console.log('¡Coincidencia exacta encontrada!');
+                            }
+                        }
+                    }
+                });
+                
+                if (matchFound) {
+                    const product = {};
+                    headers.forEach((header, headerIndex) => {
+                        product[header] = row[headerIndex] || '';
+                    });
+                    product.rowIndex = index + 2; // +2 porque empezamos desde 1 y hay headers
+                    product.matchedColumn = matchedColumn;
+                    product.matchedValue = matchedValue;
+                    results.push(product);
+                    console.log('Producto agregado a resultados:', product);
+                }
+            });
+            
+            console.log('Resultados finales:', results);
+            return results;
+        }
+        
+        function identifySearchColumns() {
+            const searchColumns = [];
+            
+            headers.forEach((header, index) => {
+                const headerLower = header.toLowerCase();
+                
+                // Identificar código interno - más flexible
+                if ((headerLower.includes('codigo') && headerLower.includes('interno')) ||
+                    (headerLower.includes('cod') && headerLower.includes('int')) ||
+                    headerLower === 'codigo interno' ||
+                    headerLower === 'cod interno' ||
+                    headerLower === 'codigo_interno' ||
+                    headerLower === 'internal_code') {
+                    searchColumns.push({ index, header, type: 'internal_code' });
+                    console.log('Columna código interno identificada:', header);
+                }
+                // Identificar nombre/descripción - más flexible
+                else if (headerLower.includes('nombre') || 
+                         headerLower.includes('descripcion') || 
+                         headerLower.includes('producto') ||
+                         headerLower.includes('desc') ||
+                         headerLower === 'name' ||
+                         headerLower === 'product') {
+                    searchColumns.push({ index, header, type: 'name' });
+                    console.log('Columna nombre identificada:', header);
+                }
+                // Identificar código de barras principal - más flexible
+                else if ((headerLower.includes('barras') && headerLower.includes('principal')) ||
+                         (headerLower.includes('barcode') && headerLower.includes('main')) ||
+                         (headerLower.includes('codigo') && headerLower.includes('barras') && !headerLower.includes('secundario')) ||
+                         headerLower === 'codigo de barras' ||
+                         headerLower === 'barcode' ||
+                         headerLower === 'codigo_barras') {
+                    searchColumns.push({ index, header, type: 'barcode_main' });
+                    console.log('Columna código de barras principal identificada:', header);
+                }
+                // Identificar código de barras secundario - más flexible
+                else if ((headerLower.includes('barras') && headerLower.includes('secundario')) ||
+                         (headerLower.includes('barcode') && headerLower.includes('secondary')) ||
+                         (headerLower.includes('barras') && headerLower.includes('adicional')) ||
+                         headerLower === 'codigos secundarios' ||
+                         headerLower === 'barcode_secondary') {
+                    searchColumns.push({ index, header, type: 'barcode_secondary' });
+                    console.log('Columna código de barras secundarios identificada:', header);
+                }
+            });
+            
+            console.log('Columnas de búsqueda identificadas:', searchColumns);
+            return searchColumns;
+        }
+        
+        function displayResults(results, searchTerm) {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsDiv = document.getElementById('results');
+            
+            if (results.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="no-results">
+                        <h3>🔍 No se encontraron resultados</h3>
+                        <p>No se encontraron productos que coincidan con "${searchTerm}"</p>
+                        <p>Verifica que el código sea correcto o intenta con un término diferente.</p>
+                    </div>
+                `;
+            } else {
+                resultsDiv.innerHTML = results.map(product => {
+                    const locationInfo = getLocationInfo(product);
+                    return `
+                        <div class="product-card">
+                            <div class="product-title">
+                                <svg class="icon" viewBox="0 0 24 24">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                </svg>
+                                Producto Encontrado
+                            </div>
+                            <div class="product-info">
+                                ${Object.entries(product).filter(([key, value]) => 
+                                    key !== 'rowIndex' && key !== 'matchedColumn' && key !== 'matchedValue' && value
+                                ).map(([key, value]) => `
+                                    <div class="info-item">
+                                        <div class="info-label">${key}</div>
+                                        <div class="info-value">${value}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="location-highlight">
+                                📍 ${locationInfo}
+                            </div>
+                            <div style="margin-top: 15px; font-size: 0.9em; color: #7f8c8d;">
+                                <strong>🎯 Coincidencia exacta en:</strong> ${product.matchedColumn} → "${product.matchedValue}"
+                                ${product.matchedColumn.toLowerCase().includes('secundario') ? 
+                                    '<br><small>💡 Encontrado en códigos de barras secundarios</small>' : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            resultsSection.style.display = 'block';
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function getLocationInfo(product) {
+            // Buscar campos que contengan información de ubicación
+            const locationFields = ['fila', 'anaquel', 'charola', 'estante', 'pasillo', 'seccion', 'ubicacion', 'posicion'];
+            const locationInfo = [];
+            
+            Object.entries(product).forEach(([key, value]) => {
+                if (locationFields.some(field => key.toLowerCase().includes(field)) && value) {
+                    locationInfo.push(`${key}: ${value}`);
+                }
+            });
+            
+            if (locationInfo.length === 0) {
+                // Si no hay campos específicos de ubicación, mostrar información general
+                return `Fila ${product.rowIndex} del archivo Excel`;
+            }
+            
+            return locationInfo.join(' | ');
+        }
+        
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('resultsSection').style.display = 'none';
+            document.getElementById('searchInput').focus();
+        }
+        
+        function showMessage(message, type) {
+            const existing = document.querySelector('.error, .success');
+            if (existing) {
+                existing.remove();
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            
+            const uploadSection = document.getElementById('uploadSection');
+            uploadSection.parentNode.insertBefore(messageDiv, uploadSection.nextSibling);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+        
+        // Enfocar en el input de búsqueda al cargar
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('searchInput').focus();
+        });
+    </script>
+</body>
+</html>
