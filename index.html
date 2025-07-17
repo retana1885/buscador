@@ -342,15 +342,15 @@
             </div>
             
             <div class="search-section" id="searchSection">
-                <h2>🎯 Búsqueda Exacta de Productos</h2>
+                <h2>🎯 Búsqueda de Productos</h2>
                 <div class="search-group">
                     <input type="text" 
                            id="searchInput" 
                            class="search-input" 
-                           placeholder="Código exacto: 103, ABC123, o nombre completo..." 
+                           placeholder="Buscar por código de barras, código secundario, código o nombre..." 
                            onkeypress="handleKeyPress(event)">
                     <button class="search-btn" onclick="searchProduct()">
-                        🎯 Buscar Exacto
+                        🔍 Buscar
                     </button>
                     <button class="clear-btn" onclick="clearSearch()">
                         🗑️ Limpiar
@@ -452,28 +452,28 @@
             if (searchColumns.length > 0) {
                 const columnInfo = searchColumns.map(col => {
                     const typeNames = {
-                        'internal_code': '🔢 Código Interno',
-                        'name': '📝 Nombre/Descripción',
-                        'barcode_main': '🏷️ Código de Barras Principal',
-                        'barcode_secondary': '🏷️ Códigos de Barras Secundarios'
+                        'cod_barras': '🏷️ Código de Barras',
+                        'secundarios': '🔢 Códigos Secundarios',
+                        'codigo': '📝 Código',
+                        'nombre': '📋 Nombre/Descripción'
                     };
-                    return `${typeNames[col.type]}: "${col.header}"`;
+                    return `${typeNames[col.type] || col.type}: "${col.header}"`;
                 }).join('<br>');
                 
                 suggestions.innerHTML = `
-                    <strong>🔍 Búsqueda exacta disponible en:</strong><br>
+                    <strong>🔍 Búsqueda disponible en:</strong><br>
                     ${columnInfo}
                     <br><br>
                     <strong>💡 Consejos:</strong><br>
-                    • La búsqueda es exacta, escribe el código completo<br>
-                    • Para códigos de barras secundarios, puedes buscar cualquiera de los códigos separados por comas<br>
-                    • Ejemplo: Si buscas "103", solo mostrará el producto con código exacto "103"
+                    • Puedes buscar por cualquier código de barras, código secundario, código o nombre<br>
+                    • La búsqueda es flexible y encuentra coincidencias parciales<br>
+                    • Para códigos secundarios, busca cualquier código separado por comas<br>
+                    • Ejemplo: "7501573900276" o "LORATADINA" o "1"
                 `;
             } else {
                 suggestions.innerHTML = `
                     <strong>⚠️ Columnas detectadas:</strong> ${headers.join(', ')}<br>
-                    <strong>💡 Sugerencia:</strong> Asegúrate de que tu Excel tenga columnas como:
-                    "Código Interno", "Nombre", "Código de Barras Principal", "Código de Barras Secundarios"
+                    <strong>💡 Sugerencia:</strong> Asegúrate de que tu Excel tenga las columnas correctas.
                 `;
             }
         }
@@ -505,51 +505,53 @@
         
         function findProducts(searchTerm) {
             const results = [];
-            const searchExact = searchTerm.trim();
+            const searchLower = searchTerm.toLowerCase().trim();
             
-            console.log('Buscando término:', searchExact);
+            console.log('Buscando término:', searchLower);
             console.log('Headers disponibles:', headers);
             
-            // Si no hay columnas específicas identificadas, buscar en todas las columnas
             const searchColumns = identifySearchColumns();
             console.log('Columnas de búsqueda identificadas:', searchColumns);
-            
-            // Si no se identificaron columnas específicas, buscar en todas
-            if (searchColumns.length === 0) {
-                headers.forEach((header, index) => {
-                    searchColumns.push({ index, header, type: 'general' });
-                });
-            }
             
             excelData.forEach((row, index) => {
                 let matchFound = false;
                 let matchedColumn = '';
                 let matchedValue = '';
+                let matchType = '';
                 
-                // Buscar en columnas específicas de manera exacta
+                // Buscar en columnas específicas
                 searchColumns.forEach(colInfo => {
                     const cellValue = row[colInfo.index];
                     if (cellValue && !matchFound) {
                         const cellStr = cellValue.toString().trim();
-                        console.log(`Comparando "${cellStr}" con "${searchExact}" en columna ${colInfo.header}`);
+                        console.log(`Comparando "${cellStr}" con "${searchTerm}" en columna ${colInfo.header}`);
                         
-                        // Para códigos de barras secundarios, buscar en la cadena separada por comas, punto y coma o espacios
-                        if (colInfo.type === 'barcode_secondary') {
-                            const barcodes = cellStr.split(/[,;|\s]+/).map(bc => bc.trim()).filter(bc => bc.length > 0);
-                            console.log('Códigos de barras secundarios encontrados:', barcodes);
-                            if (barcodes.includes(searchExact)) {
+                        // Para códigos secundarios, buscar en la cadena separada por comas
+                        if (colInfo.type === 'secundarios') {
+                            const secundarios = cellStr.split(/[,;|\s]+/).map(bc => bc.trim()).filter(bc => bc.length > 0);
+                            console.log('Códigos secundarios encontrados:', secundarios);
+                            
+                            // Buscar coincidencia exacta o parcial en códigos secundarios
+                            const foundSecundario = secundarios.find(sec => 
+                                sec.toLowerCase().includes(searchLower) || 
+                                sec === searchTerm
+                            );
+                            
+                            if (foundSecundario) {
                                 matchFound = true;
                                 matchedColumn = colInfo.header;
-                                matchedValue = cellValue;
+                                matchedValue = foundSecundario;
+                                matchType = 'Código secundario';
                                 console.log('¡Coincidencia encontrada en códigos secundarios!');
                             }
                         } else {
-                            // Búsqueda exacta para código interno, nombre y código de barras principal
-                            if (cellStr === searchExact) {
+                            // Búsqueda flexible para otros campos
+                            if (cellStr.toLowerCase().includes(searchLower) || cellStr === searchTerm) {
                                 matchFound = true;
                                 matchedColumn = colInfo.header;
                                 matchedValue = cellValue;
-                                console.log('¡Coincidencia exacta encontrada!');
+                                matchType = colInfo.type;
+                                console.log('¡Coincidencia encontrada!');
                             }
                         }
                     }
@@ -563,6 +565,7 @@
                     product.rowIndex = index + 2; // +2 porque empezamos desde 1 y hay headers
                     product.matchedColumn = matchedColumn;
                     product.matchedValue = matchedValue;
+                    product.matchType = matchType;
                     results.push(product);
                     console.log('Producto agregado a resultados:', product);
                 }
@@ -576,46 +579,24 @@
             const searchColumns = [];
             
             headers.forEach((header, index) => {
-                const headerLower = header.toLowerCase();
+                const headerLower = header.toLowerCase().trim();
                 
-                // Identificar código interno - más flexible
-                if ((headerLower.includes('codigo') && headerLower.includes('interno')) ||
-                    (headerLower.includes('cod') && headerLower.includes('int')) ||
-                    headerLower === 'codigo interno' ||
-                    headerLower === 'cod interno' ||
-                    headerLower === 'codigo_interno' ||
-                    headerLower === 'internal_code') {
-                    searchColumns.push({ index, header, type: 'internal_code' });
-                    console.log('Columna código interno identificada:', header);
+                // Buscar columnas específicas de tu tabla
+                if (headerLower.includes('cod') && headerLower.includes('barras')) {
+                    searchColumns.push({ index, header, type: 'cod_barras' });
+                    console.log('Columna código de barras identificada:', header);
                 }
-                // Identificar nombre/descripción - más flexible
-                else if (headerLower.includes('nombre') || 
-                         headerLower.includes('descripcion') || 
-                         headerLower.includes('producto') ||
-                         headerLower.includes('desc') ||
-                         headerLower === 'name' ||
-                         headerLower === 'product') {
-                    searchColumns.push({ index, header, type: 'name' });
+                else if (headerLower.includes('secundarios')) {
+                    searchColumns.push({ index, header, type: 'secundarios' });
+                    console.log('Columna secundarios identificada:', header);
+                }
+                else if (headerLower === 'codigo' || headerLower === 'código') {
+                    searchColumns.push({ index, header, type: 'codigo' });
+                    console.log('Columna código identificada:', header);
+                }
+                else if (headerLower.includes('nombre') || headerLower.includes('descripcion')) {
+                    searchColumns.push({ index, header, type: 'nombre' });
                     console.log('Columna nombre identificada:', header);
-                }
-                // Identificar código de barras principal - más flexible
-                else if ((headerLower.includes('barras') && headerLower.includes('principal')) ||
-                         (headerLower.includes('barcode') && headerLower.includes('main')) ||
-                         (headerLower.includes('codigo') && headerLower.includes('barras') && !headerLower.includes('secundario')) ||
-                         headerLower === 'codigo de barras' ||
-                         headerLower === 'barcode' ||
-                         headerLower === 'codigo_barras') {
-                    searchColumns.push({ index, header, type: 'barcode_main' });
-                    console.log('Columna código de barras principal identificada:', header);
-                }
-                // Identificar código de barras secundario - más flexible
-                else if ((headerLower.includes('barras') && headerLower.includes('secundario')) ||
-                         (headerLower.includes('barcode') && headerLower.includes('secondary')) ||
-                         (headerLower.includes('barras') && headerLower.includes('adicional')) ||
-                         headerLower === 'codigos secundarios' ||
-                         headerLower === 'barcode_secondary') {
-                    searchColumns.push({ index, header, type: 'barcode_secondary' });
-                    console.log('Columna código de barras secundarios identificada:', header);
                 }
             });
             
@@ -648,7 +629,7 @@
                             </div>
                             <div class="product-info">
                                 ${Object.entries(product).filter(([key, value]) => 
-                                    key !== 'rowIndex' && key !== 'matchedColumn' && key !== 'matchedValue' && value
+                                    key !== 'rowIndex' && key !== 'matchedColumn' && key !== 'matchedValue' && key !== 'matchType' && value
                                 ).map(([key, value]) => `
                                     <div class="info-item">
                                         <div class="info-label">${key}</div>
@@ -657,12 +638,11 @@
                                 `).join('')}
                             </div>
                             <div class="location-highlight">
-                                📍 ${locationInfo}
+                                ${locationInfo}
                             </div>
                             <div style="margin-top: 15px; font-size: 0.9em; color: #7f8c8d;">
-                                <strong>🎯 Coincidencia exacta en:</strong> ${product.matchedColumn} → "${product.matchedValue}"
-                                ${product.matchedColumn.toLowerCase().includes('secundario') ? 
-                                    '<br><small>💡 Encontrado en códigos de barras secundarios</small>' : ''}
+                                <strong>🎯 Encontrado en:</strong> ${product.matchedColumn} → "${product.matchedValue}"
+                                <br><small>💡 Tipo de coincidencia: ${product.matchType}</small>
                             </div>
                         </div>
                     `;
@@ -674,22 +654,22 @@
         }
         
         function getLocationInfo(product) {
-            // Buscar campos que contengan información de ubicación
-            const locationFields = ['fila', 'anaquel', 'charola', 'estante', 'pasillo', 'seccion', 'ubicacion', 'posicion'];
-            const locationInfo = [];
+            // Buscar específicamente las columnas fila, anaquel y charola
+            const fila = product['fila'] || product['Fila'] || '';
+            const anaquel = product['anaquel'] || product['Anaquel'] || '';
+            const charola = product['charola'] || product['Charola'] || '';
             
-            Object.entries(product).forEach(([key, value]) => {
-                if (locationFields.some(field => key.toLowerCase().includes(field)) && value) {
-                    locationInfo.push(`${key}: ${value}`);
-                }
-            });
+            const locationParts = [];
             
-            if (locationInfo.length === 0) {
-                // Si no hay campos específicos de ubicación, mostrar información general
-                return `Fila ${product.rowIndex} del archivo Excel`;
+            if (fila) locationParts.push(`📍 Fila: ${fila}`);
+            if (anaquel) locationParts.push(`🗄️ Anaquel: ${anaquel}`);
+            if (charola) locationParts.push(`📦 Charola: ${charola}`);
+            
+            if (locationParts.length === 0) {
+                return `📍 Ubicación: Fila ${product.rowIndex} del archivo Excel`;
             }
             
-            return locationInfo.join(' | ');
+            return locationParts.join(' | ');
         }
         
         function clearSearch() {
