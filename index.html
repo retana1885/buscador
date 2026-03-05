@@ -318,12 +318,12 @@
         
         <div class="main-content">
             <div class="upload-section" id="uploadSection">
-                <h2>📁 Cargar Archivo Excel</h2>
-                <p>Selecciona o arrastra tu archivo Excel con los datos del inventario</p>
+                <h2>☁️ Archivo base desde GitHub</h2>
+                <p>El sistema carga automaticamente el archivo de posiciones publicado en este repositorio.</p>
                 <br>
                 <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" />
                 <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-                    Seleccionar Archivo
+                    Reemplazar temporalmente con otro archivo
                 </button>
                 <div id="fileName" style="margin-top: 10px; font-weight: bold; color: #3498db;"></div>
                 <div class="stats" id="fileStats" style="display: none;">
@@ -368,6 +368,7 @@
     </div>
 
     <script>
+        const DEFAULT_EXCEL_FILE = 'posiciones_buscador.xlsx';
         let excelData = [];
         let headers = [];
         
@@ -406,36 +407,56 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[sheetName];
-                    
-                    // Convertir a JSON
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    
-                    if (jsonData.length > 0) {
-                        headers = jsonData[0];
-                        excelData = jsonData.slice(1);
-                        
-                        // Mostrar estadísticas
-                        updateStats();
-                        
-                        // Mostrar sección de búsqueda
-                        document.getElementById('searchSection').style.display = 'block';
-                        
-                        showMessage('✅ Archivo cargado exitosamente. ¡Listo para buscar!', 'success');
-                        
-                        // Mostrar sugerencias de búsqueda
-                        updateSearchSuggestions();
-                    } else {
-                        showMessage('❌ El archivo está vacío o no tiene el formato correcto.', 'error');
-                    }
+                    processExcelArrayBuffer(e.target.result);
+                    showMessage('✅ Archivo cargado exitosamente. ¡Listo para buscar!', 'success');
                 } catch (error) {
                     showMessage('❌ Error al leer el archivo: ' + error.message, 'error');
                 }
             };
             reader.readAsArrayBuffer(file);
+        }
+
+        function processExcelArrayBuffer(arrayBuffer) {
+            const data = new Uint8Array(arrayBuffer);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            if (jsonData.length === 0) {
+                throw new Error('El archivo esta vacio o no tiene el formato correcto.');
+            }
+
+            headers = jsonData[0];
+            excelData = jsonData.slice(1);
+
+            updateStats();
+            document.getElementById('searchSection').style.display = 'block';
+            updateSearchSuggestions();
+        }
+
+        async function loadDefaultFile() {
+            const fileName = document.getElementById('fileName');
+            const cacheBuster = Date.now();
+            const defaultFileUrl = `${DEFAULT_EXCEL_FILE}?v=${cacheBuster}`;
+
+            fileName.textContent = `Cargando archivo base: ${DEFAULT_EXCEL_FILE}`;
+
+            try {
+                const response = await fetch(defaultFileUrl, { cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error(`No se pudo descargar el archivo (${response.status})`);
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+                processExcelArrayBuffer(arrayBuffer);
+
+                fileName.textContent = `Archivo base activo: ${DEFAULT_EXCEL_FILE}`;
+                showMessage('✅ Archivo base cargado correctamente desde GitHub.', 'success');
+            } catch (error) {
+                fileName.textContent = 'No se pudo cargar el archivo base.';
+                showMessage('❌ Error al cargar archivo base: ' + error.message, 'error');
+            }
         }
         
         function updateStats() {
@@ -493,7 +514,7 @@
             }
             
             if (excelData.length === 0) {
-                showMessage('⚠️ Primero debes cargar un archivo Excel.', 'error');
+                showMessage('⚠️ Aun no hay datos cargados.', 'error');
                 return;
             }
             
@@ -699,6 +720,7 @@
         
         // Enfocar en el input de búsqueda al cargar
         document.addEventListener('DOMContentLoaded', () => {
+            loadDefaultFile();
             document.getElementById('searchInput').focus();
         });
     </script>
