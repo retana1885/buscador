@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700;800&family=JetBrains+Mono:wght@700;800&display=swap" rel="stylesheet">
-<link rel="icon" type="image/png" href="favicono.png">
+<link rel="icon" type="image/x-icon" href="favicono.ico">
 <style>
 :root{
   --brand:#c8102e; --brand-hot:#ff3b57; --brand-soft:rgba(255,59,87,.16);
@@ -908,44 +908,99 @@ function zonaPlana(fila){
   return s;
 }
 
-/* ================== CÁMARA ================== */
-let camStream=null, camLoop=null, zxingReader=null, torchOn=false;
+/* ================== CÁMARA ==================
+   Dos motores, mismo camino de frames:
+   - 'nativo'  = BarcodeDetector (Chrome/Android) con WATCHDOG: si en 6s no
+     detecta nada (pasa en Androids sin el modulo de Google Play), cambia a ZXing.
+   - 'zxing'   = nucleo estable de @zxing/library 0.18.6 (MultiFormatReader +
+     HybridBinarizer) sobre un canvas recortado a la banda del recuadro.
+     NO usar decodeFromVideoElement: en builds nuevos el callback continuo
+     dejo de existir y se queda mudo para siempre (bug real visto en iPhone). */
+let camStream=null, camLoop=null, camMotor=null, camNativo=null, camZX=null, camCanvas=null, camT0=0, torchOn=false;
+const CAM_WATCHDOG_MS = 6000;
+
 async function openCam(){
   $('camOverlay').classList.add('open');
+  camHint('Centra el código de barras en el recuadro');
   try{
     camStream = await navigator.mediaDevices.getUserMedia({
       video:{facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}}, audio:false
     });
     const v = $('camVideo'); v.srcObject = camStream; await v.play();
+    camMotor = null;
     if ('BarcodeDetector' in window){
-      const det = new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf']});
-      const tick = async ()=>{
-        if (!camStream) return;
-        try{
-          const codes = await det.detect(v);
-          if (codes.length){ onScan(codes[0].rawValue); return; }
-        }catch(e){}
-        camLoop = requestAnimationFrame(tick);
-      };
-      camLoop = requestAnimationFrame(tick);
-    } else {
-      await loadZXing();
-      zxingReader = new ZXing.BrowserMultiFormatReader();
-      zxingReader.decodeFromVideoElement($('camVideo'), (res)=>{ if (res) onScan(res.getText()); });
+      try{
+        const fm = await BarcodeDetector.getSupportedFormats();
+        if (fm && fm.length){
+          camNativo = new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','itf']
+            .filter(f=>fm.includes(f))});
+          camMotor = 'nativo';
+        }
+      }catch(e){ /* detector fantasma: cae a zxing */ }
     }
+    if (camMotor !== 'nativo') await armarZXing();
+    camT0 = Date.now();
+    camTick();
   }catch(e){
     closeCam();
-    alert('No pude abrir la cámara: '+ e.message +'\n\nOJO: la cámara solo funciona en localhost o en HTTPS.');
+    alert('No pude abrir la cámara: '+ e.message +'\n\nOJO: la cámara solo funciona en HTTPS (o localhost).');
   }
+}
+async function armarZXing(){
+  await loadZXing();
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A,
+    ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
+    ZXing.BarcodeFormat.ITF ]);
+  camZX = new ZXing.MultiFormatReader();
+  camZX.setHints(hints);
+  camCanvas = document.createElement('canvas');
+  camMotor = 'zxing';
+}
+async function camTick(){
+  if (!camStream) return;
+  const v = $('camVideo');
+  if (v.readyState >= 2 && v.videoWidth){
+    if (camMotor === 'nativo'){
+      try{
+        const codes = await camNativo.detect(v);
+        if (codes.length){ onScan(codes[0].rawValue); return; }
+      }catch(e){ /* frame malo: seguir */ }
+      // watchdog: nativo mudo -> probar zxing
+      if (Date.now() - camT0 > CAM_WATCHDOG_MS){
+        try{ await armarZXing(); }catch(e){ camT0 = Date.now(); } // sin red: reintenta nativo
+      }
+    } else if (camMotor === 'zxing'){
+      // banda central del frame (como el recuadro): 92% ancho x 42% alto
+      const vw=v.videoWidth, vh=v.videoHeight;
+      const sw=Math.floor(vw*.92), sh=Math.floor(vh*.42);
+      const sx=(vw-sw)>>1, sy=(vh-sh)>>1;
+      camCanvas.width=sw; camCanvas.height=sh;
+      camCanvas.getContext('2d',{willReadFrequently:true}).drawImage(v,sx,sy,sw,sh,0,0,sw,sh);
+      try{
+        const src = new ZXing.HTMLCanvasElementLuminanceSource(camCanvas);
+        const res = camZX.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src)));
+        camZX.reset();
+        if (res){ onScan(res.getText()); return; }
+      }catch(e){ try{camZX.reset();}catch(_){} /* NotFound: frame sin codigo, normal */ }
+    }
+  }
+  camLoop = setTimeout(camTick, camMotor === 'zxing' ? 170 : 120);
 }
 function loadZXing(){
   return new Promise((ok,bad)=>{
-    if (window.ZXing) return ok();
+    if (window.ZXing && window.ZXing.MultiFormatReader) return ok();
     const sc = document.createElement('script');
-    sc.src = 'https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
-    sc.onload = ()=>ok(); sc.onerror = ()=>bad(new Error('sin ZXing'));
+    sc.src = 'https://unpkg.com/@zxing/library@0.18.6/umd/index.min.js';
+    sc.onload = ()=>ok(); sc.onerror = ()=>{ camHint('Sin internet para cargar el lector — usa la pistola o teclea el código', true); bad(new Error('sin ZXing')); };
     document.head.appendChild(sc);
   });
+}
+function camHint(msg, esError){
+  const el = document.querySelector('.camhint');
+  if (el){ el.textContent = msg; el.style.color = esError ? '#ff8d9d' : '#fff'; }
 }
 function onScan(text){
   beep(); if (navigator.vibrate) navigator.vibrate(120);
@@ -955,8 +1010,9 @@ function onScan(text){
 }
 function closeCam(){
   $('camOverlay').classList.remove('open');
-  if (camLoop) cancelAnimationFrame(camLoop), camLoop=null;
-  if (zxingReader){ try{zxingReader.reset();}catch(e){} zxingReader=null; }
+  if (camLoop){ clearTimeout(camLoop); camLoop=null; }
+  camMotor=null; camNativo=null;
+  if (camZX){ try{camZX.reset();}catch(e){} camZX=null; }
   if (camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
   torchOn=false;
 }
