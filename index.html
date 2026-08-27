@@ -292,6 +292,11 @@ main{flex:1;width:100%;min-width:0;padding:8px 0 90px}
 .prodmeta{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--txt-dim);font-weight:700;margin-bottom:14px;letter-spacing:.03em}
 .prodmeta .stock{font-weight:800}
 .prodmeta .stock.ok{color:var(--ok)} .prodmeta .stock.zero{color:var(--warn)}
+.prodmeta .exage{font-weight:600;color:var(--txt-faint);text-transform:none;letter-spacing:0}
+.exleyenda{
+  margin-top:12px;text-align:center;font-size:.6rem;font-weight:600;
+  color:var(--txt-faint);letter-spacing:.04em;
+}
 
 /* panel de vuelo: F / A / C */
 .locpanel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}
@@ -670,9 +675,34 @@ function parseWorkbook(wb){
   }
   $('fileStatus').textContent = PRODUCTOS.length + ' productos · ' + Object.keys(FILA_DIMS).length + ' filas';
 }
+/* Existencia de bodega EN VIVO: existencias.json lo regenera el droplet cada 15 min
+   (L-V 8:30-17:00, sab 8-12) y lo empuja a este repo. Si falta, cae a la hoja 2 del Excel. */
+let EX_LIVE = null, EX_TS = null;
+async function cargarExistenciasVivas(){
+  try{
+    const r = await fetch('existencias.json?v=' + Date.now(), {cache:'no-store'});
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d && d.existencias){ EX_LIVE = d.existencias; EX_TS = d.actualizado; }
+  }catch(e){ /* sin json: fallback a la hoja del Excel */ }
+}
+function edadTexto(iso){
+  const ms = Date.now() - Date.parse(iso);
+  if (!isFinite(ms)) return '';
+  const min = Math.round(ms/60000);
+  if (min < 2) return 'recién actualizada';
+  if (min < 60) return 'hace ' + min + ' min';
+  const f = new Date(iso), hoy = new Date();
+  const hhmm = f.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+  if (f.toDateString() === hoy.toDateString()) return 'de hoy ' + hhmm;
+  return 'del ' + f.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'}) + ' ' + hhmm;
+}
 async function autoLoad(){
   try{
-    const resp = await fetch(EXCEL_FILE + '?v=' + Date.now(), {cache:'no-store'});
+    const [resp] = await Promise.all([
+      fetch(EXCEL_FILE + '?v=' + Date.now(), {cache:'no-store'}),
+      cargarExistenciasVivas(),
+    ]);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const buf = await resp.arrayBuffer();
     parseWorkbook(XLSX.read(buf, {type:'array'}));
@@ -763,9 +793,16 @@ function showDetail(p){
   const aN = parseInt(p.anaquel.replace(/\D/g,''))||0;
   const cN = parseInt(p.charola.replace(/\D/g,''))||0;
   const dims = FILA_DIMS[p.fila] || {anaqueles:7, charolas:5};
-  const st = p.existencia;
+  // existencia: primero la viva (existencias.json), si no la hoja 2 del Excel
+  const stLive = (EX_LIVE && p.codigo in EX_LIVE) ? EX_LIVE[p.codigo] : null;
+  const st = (stLive != null) ? stLive : p.existencia;
+  const fuente = (stLive != null) ? '<span class="exage">'+edadTexto(EX_TS)+'</span>'
+               : (st != null ? '<span class="exage">según último Excel</span>' : '');
   const stockHtml = (st==null) ? '' :
-    ' &middot; <span class="stock '+(Number(st)>0?'ok':'zero')+'">EXISTENCIA: '+st+' PZ</span>';
+    ' &middot; <span class="stock '+(Number(st)>0?'ok':'zero')+'">EXISTENCIA: '+st+' PZ</span> '+fuente;
+  const exLeyenda = (stLive != null)
+    ? '<div class="exleyenda">Existencia de bodega &middot; se actualiza cada 15 min &middot; L&ndash;V 8:30&ndash;17:00 y s&aacute;b 8:00&ndash;12:00 &middot; fuera de ese horario se muestra la &uacute;ltima foto</div>'
+    : '';
 
   const nivelTxt = cN===1 ? 'nivel más ALTO' : (cN===dims.charolas ? 'nivel de ABAJO' : 'nivel '+cN+' de '+dims.charolas+' (contando desde arriba)');
   // zona a piso (tarimas): no hay anaquel/charola que explicar
@@ -801,6 +838,7 @@ function showDetail(p){
           captionHtml+
         '</div>'+
       '</div>'+
+      exLeyenda+
       '<button class="btn backbtn" onclick="resetView()">&#8592; NUEVA BÚSQUEDA</button>'+
     '</div>';
   keepFocus();
