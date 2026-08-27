@@ -1024,16 +1024,29 @@ async function toggleTorch(){
     await track.applyConstraints({advanced:[{torch:torchOn}]});
   }catch(e){ alert('Este dispositivo no soporta encender la lámpara desde el navegador.'); }
 }
-function beep(){
+/* iOS solo deja sonar audio web si el contexto se crea/reanuda DURANTE un toque
+   del usuario: se desbloquea al abrir la camara y se reusa en el beep. */
+let audioCtx = null;
+function unlockAudio(){
   try{
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(.25, ctx.currentTime);
-    o.start(); o.stop(ctx.currentTime + .12);
+    if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
   }catch(e){}
 }
-$('btnCam').addEventListener('click', openCam);
+function beep(){
+  try{
+    unlockAudio();
+    if (!audioCtx) return;
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.frequency.value = 1175; o.type = 'square';
+    o.connect(g); g.connect(audioCtx.destination);
+    g.gain.setValueAtTime(.22, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .14);
+    o.start(t); o.stop(t + .15);
+  }catch(e){}
+}
+$('btnCam').addEventListener('click', ()=>{ unlockAudio(); openCam(); });
 
 /* ================== TEMA Y FONDO (persisten por navegador) ================== */
 const BGS = [
